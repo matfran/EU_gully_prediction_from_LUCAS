@@ -1,0 +1,309 @@
+var name_export = 'LUCAS_GULLIES_FEATURES_NSB';
+var points_in = gullies_nsb;
+var folder = 'LUCAS_GULLIES_FEATURES';
+
+
+var points = points_in.map(function(feature) {
+  return ee.Feature(feature.geometry(), {'id': feature.get('FID'), 'Gully': feature.get('Gully')});
+});
+
+var MODIS = ee.ImageCollection('MODIS/006/MOD44B').filterBounds(points);
+var MODIS2 = ee.ImageCollection.fromImages([MODIS.reduce(ee.Reducer.last())]);
+print(MODIS2);
+
+
+var dataset = 'COPERNICUS/S2_SR_HARMONIZED';
+
+var collection = ee.ImageCollection(dataset)
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',30))
+  .filterDate('2022-01-1','2022-12-31')
+  .filterBounds(points);
+  
+var eucm_im = ee.ImageCollection('JRC/D5/EUCROPMAP/V1').filterDate(
+    '2018-01-01', '2019-01-01').filterBounds(points).first();
+var eucm = ee.ImageCollection.fromImages([eucm_im]);
+print(eucm);
+
+var clay_content = ee.Image("OpenLandMap/SOL/SOL_CLAY-WFRACTION_USDA-3A1A1A_M/v02");
+var soil_texture = ee.Image("OpenLandMap/SOL/SOL_TEXTURE-CLASS_USDA-TT_M/v02");
+var bulk_density = ee.Image("OpenLandMap/SOL/SOL_BULKDENS-FINEEARTH_USDA-4A1H_M/v02");
+var soil_collection = ee.ImageCollection.fromImages([clay_content, soil_texture, bulk_density]);
+print(soil_collection);
+
+
+
+var slope = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/slope").filterBounds(points).mean();
+var aspect = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/aspect").filterBounds(points).mean();
+var aspect_cosine = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/aspect-cosine").filterBounds(points).mean();
+var aspect_sine = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/aspect-sine").filterBounds(points).mean();
+var eastness = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/eastness").filterBounds(points).mean();
+var northness = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/northness").filterBounds(points).mean();
+var convergence = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/convergence").filterBounds(points).mean();
+var spi = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/spi").filterBounds(points).mean();
+var cti = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/cti").filterBounds(points).mean();
+var dx = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/dx").filterBounds(points).mean();
+var dy = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/dy").filterBounds(points).mean();
+
+
+var topography_collection = ee.ImageCollection.fromImages([slope, aspect, aspect_cosine, aspect_sine, eastness, northness, convergence, spi, cti, dx , dy]);
+
+print(topography_collection);
+
+var dxx = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/dxx").filterBounds(points).mean();
+var dxy = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/dxy").filterBounds(points).mean();
+var dyy = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/dyy").filterBounds(points).mean();
+var pcurv = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/pcurv").filterBounds(points).mean();
+var tcurv = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/tcurv").filterBounds(points).mean();
+
+var topography_collection2 = ee.ImageCollection.fromImages([dxx, dxy, dyy, pcurv, tcurv]);
+
+var elev_stdev = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/elev-stdev").filterBounds(points).mean();
+var vrm = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/vrm").filterBounds(points).mean();
+var roughness = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/roughness").filterBounds(points).mean();
+var tri = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/tri").filterBounds(points).mean();
+var tpi = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/tpi").filterBounds(points).mean();
+var dev_magnitude = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/dev-magnitude").filterBounds(points).mean();
+var dev_scale = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/dev-scale").filterBounds(points).mean();
+var rough_magnitude = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/rough-magnitude").filterBounds(points).mean();
+var rough_scale = ee.ImageCollection("projects/sat-io/open-datasets/Geomorpho90m/rough-scale").filterBounds(points).mean();
+
+var topography_collection3 = ee.ImageCollection.fromImages([elev_stdev, vrm, roughness, tri, tpi, dev_magnitude, dev_scale, rough_magnitude, rough_scale]);
+
+//-----------------------------------------------------------------------------------------
+
+var getIndices = function(img){
+  var spectral = require("users/dmlmont/spectral:spectral");
+  var S2 = spectral.scale(img, dataset);
+  
+  var parameters = {
+  "N": S2.select('B8'),
+  "R": S2.select('B4'),
+  "L": 0.5, 
+  "G": S2.select('B3'),
+  "S1": S2.select('B11'),
+  };
+  
+  var indices = spectral.computeIndex(S2,["NDVI","SAVI", "MSAVI", "NDWI", "NDSI"],parameters);
+  
+  var indices2 = indices.addBands(indices.normalizedDifference(['B11','B12']).rename('NDTI'));
+
+  
+  return indices2;
+};
+
+
+var collection = collection.map(getIndices);
+
+
+//Create and apply masking functions 
+var mask = function(image) {
+  var QA60 = image.select(['QA60']);
+  var ndvi = image.select(['NDVI']);
+  var ndsi = image.select(['NDSI']);  
+  var ndwi = image.select(['NDWI']);
+  var toremove = QA60.bitwiseAnd(1<<10).eq(0).or(QA60.bitwiseAnd(1<<11)).eq(0).or(ndvi.lt(0)).or(ndsi.gt(0.5)).or(ndwi.gt(0.5));// this gives us cloudy pixels
+  return image.updateMask(toremove.not()); // remove the clouds from image
+};
+
+
+var collection = collection.map(mask);
+
+
+//----------------------------------------------------------------------------------
+//reduce images to feature collections 
+//convert NDVI timeseries to an array per parcel
+
+
+var extract_point_values = function(collection, points, index){
+  var triplets = collection.map(function(image) {
+    return image.select(index).reduceRegions({
+      collection: points, 
+      reducer: ee.Reducer.first().setOutputs([index]), 
+      scale: 10,
+    })// reduceRegion doesn't return any output if the image doesn't intersect
+      // with the point or if the image is masked out due to cloud
+      // If there was no ndvi value found, we set the ndvi to a NoData value -9999
+      .map(function(feature) {
+      var VI = ee.List([feature.get(index), -9999])
+        .reduce(ee.Reducer.firstNonNull())
+      return feature.set({index: VI, 'imageID': image.id()});
+      })
+    }).flatten();
+
+//.setGeometry(null)  
+  
+  var format = function(t, rowId, colId) {
+    var rows = t.distinct(rowId); 
+    var joined = ee.Join.saveAll('matches').apply({
+      primary: rows, 
+      secondary: t, 
+      condition: ee.Filter.equals({
+        leftField: rowId, 
+        rightField: rowId
+      })
+    });
+    return joined.map(function(row) {
+        var values = ee.List(row.get('matches'))
+          .map(function(feature) {
+            feature = ee.Feature(feature);
+            return [feature.get(colId), feature.get(index)];
+          });
+        return row.select([rowId]).set(ee.Dictionary(values.flatten()));
+      });
+  };
+  var sentinelResults = format(triplets, 'id', 'imageID');
+  
+  
+  // There are multiple image granules for the same date processed from the same orbit
+  // Granules overlap with each other and since they are processed independently
+  // the pixel values can differ slightly. So the same pixel can have different NDVI 
+  // values for the same date from overlapping granules.
+  // So to simplify the output, we can merge observations for each day
+  // And take the max ndvi value from overlapping observations
+  var merge = function(table, rowId) {
+    return table.map(function(feature) {
+      var id = feature.get(rowId)
+      var allKeys = feature.toDictionary().keys().remove(rowId)
+      var substrKeys = ee.List(allKeys.map(function(val) { 
+          return ee.String(val).slice(0,8)}
+          ))
+      var uniqueKeys = substrKeys.distinct()
+      var pairs = uniqueKeys.map(function(key) {
+        var matches = feature.toDictionary().select(allKeys.filter(ee.Filter.stringContains('item', key))).values()
+        var val = matches.reduce(ee.Reducer.max())
+        return [key, val]
+      })
+      return feature.select([rowId]).set(ee.Dictionary(pairs.flatten()))
+    })
+  }
+  var sentinelMerged = merge(sentinelResults, 'id')
+  
+  //Merge the Sentinel timeseries back with the original points layer (includes ancillery info)
+  // Use an equals filter to specify how the collections match.
+  var toyFilter = ee.Filter.equals({
+    leftField: 'id',
+    rightField: 'id'
+  });
+  
+  // Define the join.
+  var innerJoin = ee.Join.inner();
+  
+  // Apply the join.
+  var sentinelMerged_all = innerJoin.apply(sentinelMerged, points,  toyFilter);
+  
+  //format merged table into a singular table
+  function cleanJoin(feature){
+    return ee.Feature(feature.get('primary')).copyProperties(feature.get('secondary'));
+  }
+  sentinelMerged_all = sentinelMerged_all.map(cleanJoin);
+
+  return sentinelMerged_all};
+  
+  
+
+var EUCMMerged_all = extract_point_values(eucm, points, 'classification');
+var soilMerged_all = extract_point_values(soil_collection, points, 'b0');
+var topoMerged_all = extract_point_values(topography_collection, points, 'b1');
+var topoMerged_all2 = extract_point_values(topography_collection2, points, 'b1');
+var topoMerged_all3 = extract_point_values(topography_collection3, points, 'b1');
+var sentinelMerged_all_ndvi = extract_point_values(collection, points, 'NDVI');
+var modisMerged_all_pcnt_tree = extract_point_values(MODIS2, points, "Percent_Tree_Cover_last");
+var modisMerged_all_pcnt_nontree = extract_point_values(MODIS2, points, "Percent_NonTree_Vegetation_last");
+var modisMerged_all_pcnt_nonveg = extract_point_values(MODIS2, points, "Percent_NonVegetated_last");
+
+//export merged table
+
+Export.table.toDrive({
+    collection: EUCMMerged_all,
+    description: 'POINTS_EUCM_'.concat(name_export),
+    folder: folder,
+    fileNamePrefix: 'POINTS_EUCM_'.concat(name_export),
+    fileFormat: 'CSV'
+});
+/*
+Export.table.toDrive({
+    collection: sentinelMerged_all_ndvi,
+    description: 'POINTS_NDVI_'.concat(name_export),
+    folder: folder,
+    fileNamePrefix: 'POINTS_NDVI_'.concat(name_export),
+    fileFormat: 'CSV'
+});
+*/
+Export.table.toDrive({
+    collection: modisMerged_all_pcnt_tree,
+    description: 'POINTS_MODIS1_'.concat(name_export),
+    folder: folder,
+    fileNamePrefix: 'POINTS_MODIS1_'.concat(name_export),
+    fileFormat: 'CSV'
+});
+
+Export.table.toDrive({
+    collection: modisMerged_all_pcnt_nontree,
+    description: 'POINTS_MODIS2_'.concat(name_export),
+    folder: folder,
+    fileNamePrefix: 'POINTS_MODIS2_'.concat(name_export),
+    fileFormat: 'CSV'
+});
+
+Export.table.toDrive({
+    collection: modisMerged_all_pcnt_nonveg,
+    description: 'POINTS_MODIS3_'.concat(name_export),
+    folder: folder,
+    fileNamePrefix: 'POINTS_MODIS3_'.concat(name_export),
+    fileFormat: 'CSV'
+});
+
+
+Export.table.toDrive({
+    collection: soilMerged_all,
+    description: 'POINTS_SOIL_'.concat(name_export),
+    folder: folder,
+    fileNamePrefix: 'POINTS_SOIL_'.concat(name_export),
+    fileFormat: 'CSV'
+});
+
+Export.table.toDrive({
+    collection: topoMerged_all,
+    description: 'POINTS_TOPO_'.concat(name_export),
+    folder: folder,
+    fileNamePrefix: 'POINTS_TOPO_'.concat(name_export),
+    fileFormat: 'CSV'
+});
+
+Export.table.toDrive({
+    collection: topoMerged_all2,
+    description: 'POINTS_TOPO2_'.concat(name_export),
+    folder: folder,
+    fileNamePrefix: 'POINTS_TOPO2_'.concat(name_export),
+    fileFormat: 'CSV'
+});
+
+Export.table.toDrive({
+    collection: topoMerged_all3,
+    description: 'POINTS_TOPO3_'.concat(name_export),
+    folder: folder,
+    fileNamePrefix: 'POINTS_TOPO3_'.concat(name_export),
+    fileFormat: 'CSV'
+});
+
+
+
+
+
+Map.addLayer(eucm_im, {}, 'EUCROPMAP 2018');
+Map.addLayer(points);
+var palettes = require('users/gena/packages:palettes');
+Map.addLayer(slope, {min: 0, max:360, palette: palettes.cmocean.Curl[7]}, 'Slope');
+
+var palette = ee.Dictionary({
+  0: 'FF0000',
+  1: '00FF00',
+});
+
+var gullies = points.filter(ee.Filter.eq("Gully", 1));
+var no_gullies = points.filter(ee.Filter.eq("Gully", 0));
+
+print(gullies);
+
+Map.addLayer(gullies, {color: 'FF0000'}, 'gullies');
+Map.addLayer(no_gullies, {color: '00FF00'}, 'no_gullies');
