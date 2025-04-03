@@ -2,8 +2,7 @@
 """
 Created on Mon Jun 17 09:13:40 2024
 
-
-@author: Francis Matthews francis.matthews@uniroma3.it
+@author: Francis MAtthews fmatthews1381@gmail.com github: matfran
 """
 
 #stack all arrays into 1 
@@ -127,38 +126,3 @@ for tile in np.arange(n_tiles):
     write_raster(class_prediction, metadata_copy, out_path, check_array = False)
     write_raster(prob_prediction, metadata_copy2, out_path_proba, check_array = False)
 
-"""
-
-r_splits = 3
-c_splits = 4
-
-rows = np.linspace(0, mask.shape[0] + 1, r_splits).astype(int)
-cols = np.linspace(0, mask.shape[1] + 1, c_splits).astype(int)
-
-
-for i in np.arange(len(cols) - 1):
-    col_lims = [cols[i], cols[i + 1]]
-    for j in np.arange(len(rows) - 1):
-        row_lims = [rows[j], rows[j + 1]]
-        print(row_lims, col_lims)
-        array_list = []
-        for key in new_names:
-            r_data = read_raster(rasters[key], window = True, 
-                                 row_lims = row_lims, col_lims = col_lims)      
-            shape = (r_data['all metadata']['width'], r_data['all metadata']['height'])
-            array = r_data['array']
-            print(key)
-            print(shape)     
-            array_list.append(array)
-        sys.exit()
-sys.exit()
-
-
-    
-    for i in np.arange(3):
-        array_list_ss = []
-        for arr in array_list:
-            #take part i of split array
-            arr_ss = np.split(arr, 3)[i]
-            array_list_ss.append(arr_ss)
-"""
