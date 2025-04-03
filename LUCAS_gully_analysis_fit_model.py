@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-@author: Francis Matthews francis.matthews@uniroma3.it
+To do:
+    Tune hyperparams 
+    Add other classifiers with probability / standard scalar is neccessary for SVM etc..
+    Add in cross validation procedure
     
 """
 
@@ -16,7 +19,6 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.model_selection import LearningCurveDisplay, ShuffleSplit
-#from imblearn.under_sampling import ClusterCentroids
 import shap
 from PyALE import ale 
 import matplotlib.pyplot as plt
@@ -32,30 +34,23 @@ version = "v5"
 gee_data_exists = False
 export_models = False
 spatially_balanced = False
+#signifies the sampling method describes in the manuscript
 downsample_method = "MIXED"
 model_type = "RF"
 tune_hps = False
 cross_validation = True
 plot_ale = False
+plot_shap = False
 plot_learning_curve = False
 
+data_dir = "YOUR_PATH/INPUT_FEATURES"
+r_dir = "YOUR_PATH/MODEL"
+type_ = downsample_method
+dir_gee = os.path.join(data_dir, 'GEE_SPATIALLY_UNBALANCED"')
+all_data = pd.read_csv(os.path.join(data_dir, f'ALL_FEATURES_SPATIALLY_UNBALANCED_{version}.csv')).drop(['Unnamed: 0', 'geometry'], axis = 1)
+points = gpd.read_file(os.path.join(data_dir, f'GULLY_POINTS_SPATIALLY_UNBALANCED_{version}.shp'))
+figure_dir = r_dir
 
-dir_ = r"C:\Users\fmatt\OneDrive - Universita degli Studi Roma Tre\Roma3_projects\LUCAS_gully_prediction\RESULTS"
-figure_dir = r"C:\Users\fmatt\OneDrive - Universita degli Studi Roma Tre\Roma3_projects\LUCAS_gully_prediction\MANUSCRIPT\FIGURES"
-
-if spatially_balanced == True:
-    type_ = "BALANCED"
-    dir_gee = r"C:\Users\fmatt\OneDrive - Universita degli Studi Roma Tre\Roma3_projects\LUCAS_gully_prediction\GEE_features\GEE_SPATIALLY_BALANCED"
-    r_dir = r"C:\Users\fmatt\OneDrive - Universita degli Studi Roma Tre\Roma3_projects\LUCAS_gully_prediction\RESULTS\ALL_FEATURES_SPATIALLY_BALANCED"
-    all_data = pd.read_csv(os.path.join(dir_, f'ALL_FEATURES_SPATIALLY_BALANCED_{version}.csv')).drop(['Unnamed: 0', 'geometry'], axis = 1)
-    points = gpd.read_file(os.path.join(dir_, f'GULLY_POINTS_SPATIALLY_BALANCED_{version}.shp'))
-else:
-    type_ = downsample_method
-    dir_gee = r"C:\Users\fmatt\OneDrive - Universita degli Studi Roma Tre\Roma3_projects\LUCAS_gully_prediction\GEE_features\GEE_SPATIALLY_UNBALANCED"
-    r_dir = r"C:\Users\fmatt\OneDrive - Universita degli Studi Roma Tre\Roma3_projects\LUCAS_gully_prediction\RESULTS\ALL_FEATURES_" + downsample_method
-    all_data = pd.read_csv(os.path.join(dir_, f'ALL_FEATURES_SPATIALLY_UNBALANCED_{version}.csv')).drop(['Unnamed: 0', 'geometry'], axis = 1)
-    points = gpd.read_file(os.path.join(dir_, f'GULLY_POINTS_SPATIALLY_UNBALANCED_{version}.shp'))
-    
     
 sns.set_style("whitegrid")
 
@@ -102,7 +97,7 @@ features = list(all_data.columns)
 for x in to_remove:
     features.remove(x)
     
-
+#all of these features need to be downloaded and harmonised for EU prediction
 features_processed = ['EU_LS_Mosaic_100m.tif',
  'WATEM_Code_Mean_t_ha_yr_100m.tif',
  'EU_CFactor_final_V7.tif',
@@ -124,7 +119,7 @@ features_processed = ['EU_LS_Mosaic_100m.tif',
  'slope',
  'tcurv',
  'roughness']
-
+#these features are extracted from Google Earth Engine
 features_gee = ['Percent_Tree_Cover',
  'Percent_NonTree_Vegetation',
  'Percent_NonVegetated',
@@ -202,18 +197,14 @@ for key in runs:
 
     if tune_hps == True:
         clf = RandomForestClassifier()
-        #perform a simple grid search hyperparametetr tuning
+        #perform a simple grid search hyperparametetr tuning using a typical set of hyperparameters
+        #n estimators is set high to optimise the probability estimate
         n_estimators = [int(x) for x in np.linspace(start = 2000, stop = 10000, num = 10)]
-        # Number of features to consider at every split
         max_features = ['log2', 'sqrt']
-        # Maximum number of levels in tree
         max_depth = [int(x) for x in np.linspace(10, 110, num = 11)]
         max_depth.append(None)
-        # Minimum number of samples required to split a node
         min_samples_split = [2, 5, 10]
-        # Minimum number of samples required at each leaf node
         min_samples_leaf = [1, 2, 4]
-        # Method of selecting samples for training each tree
         bootstrap = [True, False]
         random_grid = {'n_estimators': n_estimators,
                    'max_features': max_features,
