@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-To do:
-    Tune hyperparams 
-    Add other classifiers with probability / standard scalar is neccessary for SVM etc..
-    Add in cross validation procedure
-    
+Code to implement a random forest classifier model to predict gully presence 
+using pan-European spatial covariates. A random forest classifier is implemented
+however the code is also provided to implement catboost.
+Author: Francis Matthews fmatthews1381@gmail.com
 """
 
 import geopandas as gpd
