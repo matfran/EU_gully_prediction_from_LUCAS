@@ -1,3 +1,7 @@
+//A GEE script to undertake generic feature extraction at LUCAS points
+//The script samples pixel values at points of interest from an image collection.
+//Currently, the script is functional but not optimised for speed using GEE.
+
 var name_export = 'LUCAS_GULLIES_FEATURES_NSB';
 var points_in = gullies_nsb;
 var folder = 'LUCAS_GULLIES_FEATURES';
@@ -113,7 +117,8 @@ var collection = collection.map(mask);
 //reduce images to feature collections 
 //convert NDVI timeseries to an array per parcel
 
-
+//Copyright © 2022 Ujaval Gandhi www.spatialthoughts.com
+//Credit for providing the basic code structure for value extraction
 var extract_point_values = function(collection, points, index){
   var triplets = collection.map(function(image) {
     return image.select(index).reduceRegions({
